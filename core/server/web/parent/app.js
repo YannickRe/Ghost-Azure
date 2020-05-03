@@ -1,17 +1,13 @@
 const debug = require('ghost-ignition').debug('web:parent');
 const express = require('express');
 const vhost = require('@tryghost/vhost-middleware');
-const config = require('../config');
+const config = require('../../config');
 const compress = require('compression');
 const netjet = require('netjet');
-const shared = require('./shared');
+const mw = require('./middleware');
 const escapeRegExp = require('lodash.escaperegexp');
 const {URL} = require('url');
-const urlUtils = require('../lib/url-utils');
-const storage = require('../adapters/storage');
-const sentry = require('../sentry');
-
-const STATIC_IMAGE_URL_PREFIX = `/${urlUtils.STATIC_IMAGE_URL_PREFIX}`;
+const sentry = require('../../sentry');
 
 module.exports = function setupParentApp(options = {}) {
     debug('ParentApp setup start');
@@ -24,11 +20,11 @@ module.exports = function setupParentApp(options = {}) {
     // (X-Forwarded-Proto header will be checked, if present)
     parentApp.enable('trust proxy');
 
-    parentApp.use(shared.middlewares.requestId);
-    parentApp.use(shared.middlewares.logRequest);
+    parentApp.use(mw.requestId);
+    parentApp.use(mw.logRequest);
 
     // Register event emmiter on req/res to trigger cache invalidation webhook event
-    parentApp.use(shared.middlewares.emitEvents);
+    parentApp.use(mw.emitEvents);
 
     // enabled gzip compression by default
     if (config.get('compress') !== false) {
@@ -45,7 +41,8 @@ module.exports = function setupParentApp(options = {}) {
     }
 
     // This sets global res.locals which are needed everywhere
-    parentApp.use(shared.middlewares.ghostLocals);
+    // @TODO: figure out if this is really needed everywhere? Is it not frontend only...
+    parentApp.use(mw.ghostLocals);
 
     // Mount the express apps on the parentApp
 
@@ -57,22 +54,9 @@ module.exports = function setupParentApp(options = {}) {
     const adminApp = express();
     adminApp.use(sentry.requestHandler);
     adminApp.enable('trust proxy'); // required to respect x-forwarded-proto in admin requests
-    adminApp.use('/ghost/api', require('./api')());
-    adminApp.use('/ghost/.well-known', require('./well-known')());
-    adminApp.use('/ghost', require('../services/auth/session').createSessionFromToken, require('./admin')());
-
-    // TODO: remove {admin url}/content/* once we're sure the API is not returning relative asset URLs anywhere
-    // only register this route if the admin is separate so we're not overriding the {site}/content/* route
-    if (hasSeparateAdmin) {
-        adminApp.use(
-            STATIC_IMAGE_URL_PREFIX,
-            [
-                shared.middlewares.image.handleImageSizes,
-                storage.getStorage().serve(),
-                shared.middlewares.errorHandler.handleThemeResponse
-            ]
-        );
-    }
+    adminApp.use('/ghost/api', require('../api')());
+    adminApp.use('/ghost/.well-known', require('../well-known')());
+    adminApp.use('/ghost', require('../../services/auth/session').createSessionFromToken, require('../admin')());
 
     // ADMIN + API
     // with a separate admin url only serve on that host, otherwise serve on all hosts
@@ -84,7 +68,7 @@ module.exports = function setupParentApp(options = {}) {
     const frontendVhostArg = (hasSeparateAdmin && adminHost) ?
         new RegExp(`^(?!${escapeRegExp(adminHost)}).*`) : /.*/;
 
-    parentApp.use(vhost(frontendVhostArg, require('./site')(options)));
+    parentApp.use(vhost(frontendVhostArg, require('../site')(options)));
 
     debug('ParentApp setup end');
 

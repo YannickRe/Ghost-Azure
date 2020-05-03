@@ -2,6 +2,7 @@ const errors = require('@tryghost/errors');
 const {i18n} = require('../../../../lib/common');
 const auth = require('../../../../services/auth');
 const shared = require('../../../shared');
+const apiMw = require('../../middleware');
 
 const notImplemented = function (req, res, next) {
     // CASE: user is logged in, allow
@@ -52,9 +53,9 @@ const notImplemented = function (req, res, next) {
 module.exports.authAdminApi = [
     auth.authenticate.authenticateAdminApi,
     auth.authorize.authorizeAdminApi,
-    shared.middlewares.updateUserLastSeen,
-    shared.middlewares.api.cors,
-    shared.middlewares.urlRedirects.adminRedirect,
+    apiMw.updateUserLastSeen,
+    apiMw.cors,
+    shared.middlewares.urlRedirects.adminSSLAndHostRedirect,
     shared.middlewares.prettyUrls,
     notImplemented
 ];
@@ -66,9 +67,9 @@ module.exports.authAdminApi = [
 module.exports.authAdminApiWithUrl = [
     auth.authenticate.authenticateAdminApiWithUrl,
     auth.authorize.authorizeAdminApi,
-    shared.middlewares.updateUserLastSeen,
-    shared.middlewares.api.cors,
-    shared.middlewares.urlRedirects.adminRedirect,
+    apiMw.updateUserLastSeen,
+    apiMw.cors,
+    shared.middlewares.urlRedirects.adminSSLAndHostRedirect,
     shared.middlewares.prettyUrls,
     notImplemented
 ];
@@ -77,8 +78,8 @@ module.exports.authAdminApiWithUrl = [
  * Middleware for public admin endpoints
  */
 module.exports.publicAdminApi = [
-    shared.middlewares.api.cors,
-    shared.middlewares.urlRedirects.adminRedirect,
+    apiMw.cors,
+    shared.middlewares.urlRedirects.adminSSLAndHostRedirect,
     shared.middlewares.prettyUrls,
     notImplemented
 ];

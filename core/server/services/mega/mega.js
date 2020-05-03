@@ -8,19 +8,41 @@ const models = require('../../models');
 const postEmailSerializer = require('./post-email-serializer');
 const config = require('../../config');
 
-const getEmailData = async (postModel, recipients = []) => {
-    const emailTmpl = await postEmailSerializer.serialize(postModel);
+const getEmailData = async (postModel, members = []) => {
+    const {emailTmpl, replacements} = await postEmailSerializer.serialize(postModel);
+
     emailTmpl.from = membersService.config.getEmailFromAddress();
 
-    const emails = recipients.map(recipient => recipient.email);
-    const emailData = recipients.reduce((emailData, recipient) => {
-        return Object.assign({
-            [recipient.email]: {
-                unique_id: recipient.uuid,
-                unsubscribe_url: postEmailSerializer.createUnsubscribeUrl(recipient.uuid)
-            }
-        }, emailData);
-    }, {});
+    // update templates to use Mailgun variable syntax for replacements
+    replacements.forEach((replacement) => {
+        emailTmpl[replacement.format] = emailTmpl[replacement.format].replace(
+            replacement.match,
+            `%recipient.${replacement.id}%`
+        );
+    });
+
+    const emails = [];
+    const emailData = {};
+    members.forEach((member) => {
+        emails.push(member.email);
+
+        // first_name is a computed property only used here for now
+        // TODO: move into model computed property or output serializer?
+        member.first_name = (member.name || '').split(' ')[0];
+
+        // add static data to mailgun template variables
+        const data = {
+            unique_id: member.uuid,
+            unsubscribe_url: postEmailSerializer.createUnsubscribeUrl(member.uuid)
+        };
+
+        // add replacement data/requested fallback to mailgun template variables
+        replacements.forEach(({id, memberProp, fallback}) => {
+            data[id] = member[memberProp] || fallback || '';
+        });
+
+        emailData[member.email] = data;
+    });
 
     return {emailTmpl, emails, emailData};
 };
@@ -36,9 +58,10 @@ const sendEmail = async (postModel, members) => {
 };
 
 const sendTestEmail = async (postModel, toEmails) => {
-    const recipients = toEmails.map((email) => {
-        return {email};
-    });
+    const recipients = await Promise.all(toEmails.map(async (email) => {
+        const member = await membersService.api.members.get({email});
+        return member || {email};
+    }));
     const {emailTmpl, emails, emailData} = await getEmailData(postModel, recipients);
     emailTmpl.subject = `[Test] ${emailTmpl.subject}`;
     return bulkEmailService.send(emailTmpl, emails, emailData);
@@ -60,10 +83,9 @@ const addEmail = async (postModel, options) => {
     const membersToSendTo = members.filter((member) => {
         return membersService.contentGating.checkPostAccess(postModel.toJSON(), member);
     });
-    const {emailTmpl, emails} = await getEmailData(postModel, membersToSendTo);
 
     // NOTE: don't create email object when there's nobody to send the email to
-    if (!emails.length) {
+    if (!membersToSendTo.length) {
         return null;
     }
 
@@ -71,10 +93,20 @@ const addEmail = async (postModel, options) => {
     const existing = await models.Email.findOne({post_id: postId}, knexOptions);
 
     if (!existing) {
+        // get email contents and perform replacements using no member data so
+        // we have a decent snapshot of email content for later display
+        const {emailTmpl, replacements} = await postEmailSerializer.serialize(postModel, {isBrowserPreview: true});
+        replacements.forEach((replacement) => {
+            emailTmpl[replacement.format] = emailTmpl[replacement.format].replace(
+                replacement.match,
+                replacement.fallback || ''
+            );
+        });
+
         return models.Email.add({
             post_id: postId,
             status: 'pending',
-            email_count: emails.length,
+            email_count: membersToSendTo.length,
             subject: emailTmpl.subject,
             html: emailTmpl.html,
             plaintext: emailTmpl.plaintext,
@@ -233,7 +265,9 @@ async function pendingEmailHandler(emailModel, options) {
 }
 
 const statusChangedHandler = (emailModel, options) => {
-    const emailRetried = emailModel.wasChanged() && (emailModel.get('status') === 'pending') && (emailModel.previous('status') === 'failed');
+    const emailRetried = emailModel.wasChanged()
+        && emailModel.get('status') === 'pending'
+        && emailModel.previous('status') === 'failed';
 
     if (emailRetried) {
         pendingEmailHandler(emailModel, options);
