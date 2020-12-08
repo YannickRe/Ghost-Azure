@@ -33,7 +33,7 @@
         "paymentProcessors": [],
         "emailTemplate": {
             "showSiteHeader": true,
-            "showPoweredBy": false
+            "showPoweredBy": true
         }
     },
     "logging": {
@@ -116,5 +116,8 @@
     "sendWelcomeEmail": true,
     "stripeDirect": false,
     "enableStripePromoCodes": false,
-    "portal": false
+    "emailAnalytics": true,
+    "backgroundJobs": {
+        "emailAnalytics": true
+    }
 }

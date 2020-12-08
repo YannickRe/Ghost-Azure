@@ -21,7 +21,7 @@ module.exports = {
                 enableDeveloperExperiments: config.get('enableDeveloperExperiments') || false,
                 stripeDirect: config.get('stripeDirect'),
                 mailgunIsConfigured: config.get('bulkEmail') && config.get('bulkEmail').mailgun,
-                portal: config.get('portal')
+                emailAnalytics: config.get('emailAnalytics')
             };
             if (billingUrl) {
                 response.billingUrl = billingUrl;

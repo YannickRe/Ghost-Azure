@@ -40,7 +40,7 @@ function getInstance() {
     return null;
 }
 
-// recipients format:
+// recipientData format:
 // {
 //     'test@example.com': {
 //         name: 'Test User',
@@ -73,18 +73,30 @@ function send(message, recipientData, replacements) {
             to: Object.keys(recipientData),
             from: message.from,
             'h:Reply-To': message.replyTo,
-            'recipient-variables': recipientData,
             subject: messageContent.subject,
             html: messageContent.html,
-            text: messageContent.plaintext
+            text: messageContent.plaintext,
+            'recipient-variables': recipientData
         };
 
-        if (bulkEmailConfig && bulkEmailConfig.mailgun && bulkEmailConfig.mailgun.tag) {
-            messageData['o:tag'] = [bulkEmailConfig.mailgun.tag, 'bulk-email'];
+        // add a reference to the original email record for easier mapping of mailgun event -> email
+        if (message.id) {
+            messageData['v:email-id'] = message.id;
         }
+
+        const tags = ['bulk-email'];
+        if (bulkEmailConfig && bulkEmailConfig.mailgun && bulkEmailConfig.mailgun.tag) {
+            tags.push(bulkEmailConfig.mailgun.tag);
+        }
+        messageData['o:tag'] = tags;
 
         if (bulkEmailConfig && bulkEmailConfig.mailgun && bulkEmailConfig.mailgun.testmode) {
             messageData['o:testmode'] = true;
+        }
+
+        // enable tracking if turned on for this email
+        if (message.track_opens) {
+            messageData['o:tracking-opens'] = true;
         }
 
         return new Promise((resolve, reject) => {

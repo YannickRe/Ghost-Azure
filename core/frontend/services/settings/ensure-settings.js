@@ -2,7 +2,7 @@ const fs = require('fs-extra');
 const Promise = require('bluebird');
 const path = require('path');
 const debug = require('ghost-ignition').debug('frontend:services:settings:ensure-settings');
-const {i18n} = require('../../../server/lib/common');
+const {i18n} = require('../proxy');
 const errors = require('@tryghost/errors');
 const config = require('../../../shared/config');
 
@@ -25,7 +25,7 @@ module.exports = function ensureSettingsFiles(knownSettings) {
         const defaultFileName = `default-${fileName}`;
         const filePath = path.join(contentPath, fileName);
 
-        return fs.readFile(filePath, 'utf8')
+        return Promise.resolve(fs.readFile(filePath, 'utf8'))
             .catch({code: 'ENOENT'}, () => {
                 const defaultFilePath = path.join(defaultSettingsPath, defaultFileName);
                 // CASE: file doesn't exist, copy it from our defaults
