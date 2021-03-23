@@ -1,5 +1,6 @@
 const express = require('../../../../shared/express');
 const url = require('url');
+const querystring = require('querystring');
 const debug = require('ghost-ignition').debug('web:shared:mw:custom-redirects');
 const config = require('../../../../shared/config');
 const urlUtils = require('../../../../shared/url-utils');
@@ -52,10 +53,14 @@ _private.registerRoutes = () => {
             customRedirectsRouter.get(new RegExp(redirect.from, options), function (req, res) {
                 const maxAge = redirect.permanent ? config.get('caching:customRedirects:maxAge') : 0;
                 const toURL = url.parse(redirect.to);
+                const toURLParams = querystring.parse(toURL.query);
                 const currentURL = url.parse(req.url);
+                const currentURLParams = querystring.parse(currentURL.query);
+                const params = Object.assign({}, currentURLParams, toURLParams);
+                const search = querystring.stringify(params);
 
                 toURL.pathname = currentURL.pathname.replace(new RegExp(redirect.from, options), toURL.pathname);
-                toURL.search = currentURL.search;
+                toURL.search = search !== '' ? `?${search}` : null;
 
                 /**
                  * Only if the URL is internal should we prepend the Ghost subdirectory
@@ -79,7 +84,7 @@ _private.registerRoutes = () => {
             logging.error(new errors.IncorrectUsageError({
                 message: i18n.t('errors.middleware.redirects.register'),
                 context: err.message,
-                help: 'https://ghost.org/docs/api/handlebars-themes/routing/redirects/',
+                help: 'https://ghost.org/docs/themes/routing/#redirects',
                 err
             }));
         }
@@ -90,7 +95,7 @@ _private.registerRoutes = () => {
 
 /**
  * - you can extend Ghost with a custom redirects file
- * - see https://github.com/TryGhost/Ghost/issues/7707 and https://ghost.org/docs/api/handlebars-themes/routing/redirects/
+ * - see https://github.com/TryGhost/Ghost/issues/7707 and https://ghost.org/docs/themes/routing/#redirects
  * - file loads synchronously, because we need to register the routes before anything else
  */
 exports.use = function use(siteApp) {

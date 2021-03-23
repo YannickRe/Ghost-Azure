@@ -1,13 +1,11 @@
-const logging = require('../../../../shared/logging');
 const {parentPort} = require('bthreads');
-const sentry = require('../../../../shared/sentry');
 const debug = require('ghost-ignition').debug('jobs:email-analytics:fetch-all');
 
 // one-off job to fetch all available events and re-process them idempotently
 // NB. can be a _very_ long job for sites with many members and frequent emails
 
 function cancel() {
-    logging.info('Email analytics fetch-all job cancelled before completion');
+    parentPort.postMessage('Email analytics fetch-all job cancelled before completion');
 
     if (parentPort) {
         parentPort.postMessage('cancelled');
@@ -27,46 +25,36 @@ if (parentPort) {
 }
 
 (async () => {
-    try {
-        const models = require('../../../models');
-        const settingsService = require('../../settings');
+    const models = require('../../../models');
+    const settingsService = require('../../settings');
 
-        // must be initialized before emailAnalyticsService is required otherwise
-        // requires are in the wrong order and settingsCache will always be empty
-        await models.init();
-        await settingsService.init();
+    // must be initialized before emailAnalyticsService is required otherwise
+    // requires are in the wrong order and settingsCache will always be empty
+    await models.init();
+    await settingsService.init();
 
-        const emailAnalyticsService = require('../');
+    const emailAnalyticsService = require('../');
 
-        const fetchStartDate = new Date();
-        debug('Starting email analytics fetch of all available events');
-        const eventStats = await emailAnalyticsService.fetchAll();
-        const fetchEndDate = new Date();
-        debug(`Finished fetching ${eventStats.totalEvents} analytics events in ${fetchEndDate - fetchStartDate}ms`);
+    const fetchStartDate = new Date();
+    debug('Starting email analytics fetch of all available events');
+    const eventStats = await emailAnalyticsService.fetchAll();
+    const fetchEndDate = new Date();
+    debug(`Finished fetching ${eventStats.totalEvents} analytics events in ${fetchEndDate - fetchStartDate}ms`);
 
-        const aggregateStartDate = new Date();
-        debug(`Starting email analytics aggregation for ${eventStats.emailIds.length} emails`);
-        await emailAnalyticsService.aggregateStats(eventStats);
-        const aggregateEndDate = new Date();
-        debug(`Finished aggregating email analytics in ${aggregateEndDate - aggregateStartDate}ms`);
+    const aggregateStartDate = new Date();
+    debug(`Starting email analytics aggregation for ${eventStats.emailIds.length} emails`);
+    await emailAnalyticsService.aggregateStats(eventStats);
+    const aggregateEndDate = new Date();
+    debug(`Finished aggregating email analytics in ${aggregateEndDate - aggregateStartDate}ms`);
 
-        logging.info(`Fetched ${eventStats.totalEvents} events and aggregated stats for ${eventStats.emailIds.length} emails in ${aggregateEndDate - fetchStartDate}ms`);
+    parentPort.postMessage(`Fetched ${eventStats.totalEvents} events and aggregated stats for ${eventStats.emailIds.length} emails in ${aggregateEndDate - fetchStartDate}ms`);
 
-        if (parentPort) {
-            parentPort.postMessage('done');
-        } else {
-            // give the logging pipes time finish writing before exit
-            setTimeout(() => {
-                process.exit(0);
-            }, 1000);
-        }
-    } catch (error) {
-        logging.error(error);
-        sentry.captureException(error);
-
+    if (parentPort) {
+        parentPort.postMessage('done');
+    } else {
         // give the logging pipes time finish writing before exit
         setTimeout(() => {
-            process.exit(1);
+            process.exit(0);
         }, 1000);
     }
 })();

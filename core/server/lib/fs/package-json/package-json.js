@@ -8,6 +8,11 @@ const notAPackageRegex = /^\.|_messages|README.md|node_modules|bower_components/
 const packageJSONPath = 'package.json';
 
 /**
+ * @typedef {Object} Ii18n
+ * @prop {(key: string) => string} t
+ */
+
+/**
  * # Package Utils
  *
  * Ghost has / is in the process of gaining support for several different types of sub-packages:
@@ -15,9 +20,15 @@ const packageJSONPath = 'package.json';
  * - Adapters: replace fundamental pieces like storage, will become npm modules
  *
  * These utils facilitate loading, reading, managing etc, packages from the file system.
+ *
  */
 module.exports = class PackageJson {
-    constructor(i18n) {
+    /**
+     * Creates an instance of PackageJson, an util used to read and validate package.json files
+     * @param {Object} dependencies
+     * @param {Ii18n} dependencies.i18n
+     */
+    constructor({i18n}) {
         this.i18n = i18n;
     }
 
@@ -86,7 +97,7 @@ module.exports = class PackageJson {
             const err = new Error(this.i18n.t('errors.utils.parsepackagejson.themeFileIsMalformed'));
             err.context = path;
             err.err = parseError;
-            err.help = this.i18n.t('errors.utils.parsepackagejson.willBeRequired', {url: 'https://ghost.org/docs/api/handlebars-themes/'});
+            err.help = this.i18n.t('errors.utils.parsepackagejson.willBeRequired', {url: 'https://ghost.org/docs/themes/'});
 
             return Promise.reject(err);
         }
@@ -96,7 +107,7 @@ module.exports = class PackageJson {
         if (!hasRequiredKeys) {
             const err = new Error(this.i18n.t('errors.utils.parsepackagejson.nameOrVersionMissing'));
             err.context = path;
-            err.help = this.i18n.t('errors.utils.parsepackagejson.willBeRequired', {url: 'https://ghost.org/docs/api/handlebars-themes/'});
+            err.help = this.i18n.t('errors.utils.parsepackagejson.willBeRequired', {url: 'https://ghost.org/docs/themes/'});
 
             return Promise.reject(err);
         }

@@ -11,15 +11,26 @@ const Member = ghostBookshelf.Model.extend({
     defaults() {
         return {
             subscribed: true,
-            uuid: uuid.v4()
+            uuid: uuid.v4(),
+            email_count: 0,
+            email_opened_count: 0
         };
     },
 
-    relationships: ['labels', 'stripeCustomers'],
+    relationships: ['labels', 'stripeCustomers', 'email_recipients'],
+
+    // do not delete email_recipients records when a member is destroyed. Recipient
+    // records are used for analytics and historical records
+    relationshipConfig: {
+        email_recipients: {
+            destroyRelated: false
+        }
+    },
 
     relationshipBelongsTo: {
         labels: 'labels',
-        stripeCustomers: 'members_stripe_customers'
+        stripeCustomers: 'members_stripe_customers',
+        email_recipients: 'email_recipients'
     },
 
     labels: function labels() {
@@ -46,6 +57,10 @@ const Member = ghostBookshelf.Model.extend({
             'id',
             'customer_id'
         );
+    },
+
+    email_recipients() {
+        return this.hasMany('EmailRecipient', 'member_id', 'id');
     },
 
     serialize(options) {
@@ -93,6 +108,11 @@ const Member = ghostBookshelf.Model.extend({
     onSaving: function onSaving(model, attr, options) {
         let labelsToSave = [];
         let ops = [];
+
+        if (_.isUndefined(this.get('labels'))) {
+            this.unset('labels');
+            return;
+        }
 
         // CASE: detect lowercase/uppercase label slugs
         if (!_.isUndefined(this.get('labels')) && !_.isNull(this.get('labels'))) {
@@ -224,6 +244,14 @@ const Member = ghostBookshelf.Model.extend({
                 'members_stripe_customers.member_id'
             );
             queryBuilder.whereNull('members_stripe_customers.member_id');
+        }
+    },
+
+    orderRawQuery(field, direction) {
+        if (field === 'email_open_rate') {
+            return {
+                orderByRaw: `members.email_open_rate IS NOT NULL DESC, members.email_open_rate ${direction}`
+            };
         }
     },
 
